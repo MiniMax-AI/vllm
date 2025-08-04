@@ -122,7 +122,10 @@ class MiniMaxText01RMSNormTP(CustomOp):
             else:
                 weight = self.weight[:x.size(-1)]
 
-        x = x.to(orig_dtype) * weight
+        x_fp32 = x.to(torch.float32)
+        weight_fp32 = weight.to(torch.float32)
+        result = x_fp32 * weight_fp32
+        x = result.to(orig_dtype)
         return x
 
     def forward(
@@ -290,7 +293,7 @@ class MiniMaxText01MoE(nn.Module):
         hidden_states = hidden_states.view(-1, self.hidden_size)
         router_logits_fp32, _ = self.gate(hidden_states.to(torch.float32))
         final_hidden_states = self.experts(
-            hidden_states, router_logits_fp32.to(hidden_states.dtype))
+            hidden_states, router_logits_fp32)  # 保持 fp32
         final_hidden = final_hidden_states.view(num_tokens, hidden_size)
         return final_hidden
 
@@ -497,7 +500,9 @@ class MiniMaxText01LinearAttention(nn.Module):
 
         hidden = self.norm._forward(hidden)
         gate, _ = self.output_gate(hidden_states)
-        hidden = F.sigmoid(gate) * hidden
+        gate_fp32 = gate.to(torch.float32)
+        hidden_fp32 = hidden.to(torch.float32)
+        hidden = F.sigmoid(gate_fp32) * hidden_fp32
         hidden = hidden.to(hidden_states.dtype)
         hidden, _ = self.out_proj(hidden)
         return hidden
